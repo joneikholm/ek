@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Assembly, Syscalls, User Space vs Kernel Space</title>
+  <style>
+    :root{
+      --bg:#0b1020;
+      --card:#101a33;
+      --text:#eaf0ff;
+      --muted:#b7c2e6;
+      --accent:#7dd3fc;    /* light blue */
+      --accent2:#a7f3d0;   /* mint */
+      --warn:#fbbf24;      /* amber */
+      --danger:#fb7185;    /* pink/red */
+      --shadow: 0 18px 60px rgba(0,0,0,.35);
+      --radius: 22px;
+    }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background:
+        radial-gradient(1200px 600px at 18% 10%, rgba(125,211,252,.18), transparent 55%),
+        radial-gradient(900px 500px at 90% 20%, rgba(167,243,208,.14), transparent 55%),
+        radial-gradient(900px 600px at 60% 100%, rgba(251,113,133,.10), transparent 60%),
+        linear-gradient(180deg, #070a14 0%, var(--bg) 60%, #070a14 100%);
+      color: var(--text);
+      overflow:hidden;
+    }
+
+    /* Slides container */
+    .deck{
+      height:100%;
+      width:100%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding: clamp(16px, 2vw, 28px);
+    }
+    .slide{
+      width:min(1100px, 95vw);
+      height:min(680px, 92vh);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: clamp(20px, 3.2vw, 44px);
+      padding-bottom: clamp(34px, 3.2vw, 56px); /* extra room for nav hint */
+      position:relative;
+      display:none;
+      overflow:hidden;
+    }
+    .slide.active{ display:block; }
+
+    .topbar{
+      display:flex;
+      gap:14px;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom: 18px;
+    }
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:10px;
+      padding:10px 14px;
+      border-radius: 999px;
+      background: rgba(16,26,51,.75);
+      border: 1px solid rgba(255,255,255,.10);
+      color: var(--muted);
+      font-weight: 600;
+      letter-spacing:.2px;
+      font-size: 14px;
+      backdrop-filter: blur(10px);
+    }
+    .dot{
+      width:10px; height:10px; border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 0 4px rgba(125,211,252,.12);
+    }
+    .progress{
+      display:flex; align-items:center; gap:10px;
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .bar{
+      width: 140px; height: 8px; border-radius: 999px;
+      background: rgba(255,255,255,.10);
+      overflow:hidden;
+      border: 1px solid rgba(255,255,255,.08);
+    }
+    .bar > i{
+      display:block; height:100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+    }
+
+    h1{
+      margin: 4px 0 10px;
+      font-size: clamp(30px, 3.4vw, 48px);
+      line-height: 1.05;
+      letter-spacing: -0.6px;
+    }
+    h2{
+      margin: 8px 0 12px;
+      font-size: clamp(22px, 2.2vw, 30px);
+      letter-spacing: -0.3px;
+    }
+    p{
+      margin: 10px 0;
+      color: var(--muted);
+      font-size: clamp(16px, 1.5vw, 19px);
+      line-height: 1.55;
+      max-width: 72ch;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap: 22px;
+      margin-top: 18px;
+      align-items:start;
+    }
+    .grid.two{
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .card{
+      background: rgba(16,26,51,.62);
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 18px;
+      padding: 18px 18px;
+      backdrop-filter: blur(10px);
+      overflow:hidden;
+    }
+    .card h3{
+      margin: 0 0 10px;
+      font-size: 16px;
+      color: var(--text);
+      letter-spacing:.2px;
+    }
+
+    .list{
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.55;
+    }
+    .list li{ margin: 8px 0; }
+
+    code, pre{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+    pre{
+      margin: 0;
+      padding: 16px 16px;
+      border-radius: 16px;
+      background: rgba(7,10,20,.72);
+      border: 1px solid rgba(255,255,255,.10);
+      overflow:auto;
+      max-height: 360px;
+      box-shadow: 0 8px 28px rgba(0,0,0,.25) inset;
+    }
+    pre code{
+      color: #eaf0ff;
+      font-size: 14px;
+      line-height: 1.55;
+      display:block;
+      white-space: pre;
+    }
+
+    .kbd{
+      position:absolute;
+      right: 22px;
+      bottom: 18px;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      color: rgba(234,240,255,.78);
+      font-size: 13px;
+      pointer-events:none;
+    }
+    .key{
+      padding: 6px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.16);
+      background: rgba(16,26,51,.60);
+      box-shadow: 0 10px 26px rgba(0,0,0,.22);
+      font-weight: 700;
+      letter-spacing:.3px;
+    }
+
+    /* Simple diagram */
+    .stack{
+      display:flex;
+      flex-direction:column;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .layer{
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.12);
+      padding: 12px 14px;
+      background: rgba(16,26,51,.55);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 12px;
+    }
+    .layer b{ letter-spacing:.2px; }
+    .tag{
+      font-size: 12px;
+      font-weight: 800;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.16);
+      background: rgba(7,10,20,.45);
+      color: rgba(234,240,255,.85);
+      white-space: nowrap;
+    }
+    .tag.user{ border-color: rgba(125,211,252,.35); color: rgba(125,211,252,.95); }
+    .tag.kernel{ border-color: rgba(167,243,208,.35); color: rgba(167,243,208,.95); }
+    .tag.hw{ border-color: rgba(251,191,36,.35); color: rgba(251,191,36,.95); }
+
+    .callout{
+      margin-top: 14px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: linear-gradient(90deg, rgba(125,211,252,.16), rgba(167,243,208,.10));
+      padding: 14px 16px;
+      color: rgba(234,240,255,.92);
+      font-weight: 650;
+      line-height: 1.45;
+    }
+    .small{
+      font-size: 14px;
+      color: rgba(183,194,230,.92);
+    }
+
+    /* Slide 5 specific layout fix: make pipeline scroll within its card on small heights */
+    .slide[data-title="Hvem tegner pixels?"] .grid{
+      gap: 18px;
+    }
+    .slide[data-title="Hvem tegner pixels?"] .card{
+      padding: 16px 16px;
+    }
+    .slide[data-title="Hvem tegner pixels?"] .stack{
+      max-height: min(360px, 40vh);
+      overflow:auto;
+      padding-right: 6px;
+    }
+    .slide[data-title="Hvem tegner pixels?"] .layer{
+      padding: 10px 12px;
+    }
+
+    @media (prefers-reduced-motion: reduce){
+      *{ scroll-behavior:auto !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <!-- Slide 1 -->
+    <section class="slide active" data-title="Overblik">
+      <div class="topbar">
+        <div class="pill"><span class="dot"></span> Fra bytes til pixels: hvorfor “Hello world” kræver syscalls</div>
+        <div class="progress">
+          <span id="ptext">1 / 5</span>
+          <span class="bar"><i id="pbar"></i></span>
+        </div>
+      </div>
+
+      <h1>User space vs Kernel space</h1>
+      <p>
+        De fleste CPU-instruktioner (fx <b>mov</b>, <b>add</b>, <b>mul</b>) kører direkte på hardwaren i <b>user mode</b>.
+        Men adgang til <b>delte ressourcer</b> (filer, tastatur, netværk, GPU, proceskontrol) skal gå via <b>kernen</b>
+        gennem et <b>systemkald (syscall)</b>.
+      </p>
+
+      <div class="grid two">
+        <div class="card">
+          <h3>Hvad user space kan (hurtigt, direkte CPU-udførelse)</h3>
+          <ul class="list">
+            <li>Regning, løkker, branches, databehandling</li>
+            <li>Arbejde med egne memory pages (læse/skrive hvor det er tilladt)</li>
+            <li>Bygge buffers: tekst, billeder, lyd, netværksdata</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Hvad kræver kernel space (beskyttet, delt, følsomt)</h3>
+          <ul class="list">
+            <li>Enheder: skærm, disk, netkort, GPU-driver</li>
+            <li>Processer: start/stop, scheduling, signals</li>
+            <li>Isolation: “du må ikke røre andre processers memory”</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="callout">
+        Kerneidé: <b>Beregn i user space</b>. <b>Hardware og systemressourcer</b> går gennem kernen.
+      </div>
+
+      <div class="kbd">
+        <span class="small">Navigér</span>
+        <span class="key">←</span><span class="key">→</span>
+        <span class="small">eller</span>
+        <span class="key">Mellemrum</span>
+      </div>
+    </section>
+
+    <!-- Slide 2 -->
+    <section class="slide" data-title="Hello World kode">
+      <div class="topbar">
+        <div class="pill"><span class="dot"></span> Vores “Hello world” (x86-64 Linux + syscall)</div>
+        <div class="progress">
+          <span id="ptext2">2 / 5</span>
+          <span class="bar"><i id="pbar2"></i></span>
+        </div>
+      </div>
+
+      <h1>Hello world i assembly</h1>
+      <p>
+        Programmet skriver ved at kalde <b>write(fd, buf, len)</b> og afslutter med <b>exit(code)</b>.
+        Det bruger <i>ikke</i> C-biblioteker — kun kernens interface.
+      </p>
+
+      <div class="grid">
+        <div class="card">
+          <h3>Kode</h3>
+          <pre><code>section .data
+  msg db "Hello world!", 0ah
+
+section .text
+  global _start
+
+_start:
+  mov rax, 1      ; syscall #1 = write
+  mov rdi, 1      ; fd 1 = stdout
+  mov rsi, msg    ; pointer til bytes
+  mov rdx, 13     ; antal bytes
+  syscall
+
+  mov rax, 60     ; syscall #60 = exit
+  mov rdi, 0      ; exit-kode 0
+  syscall</code></pre>
+        </div>
+
+        <div class="card">
+          <h3>Registrer for syscalls (x86-64 Linux)</h3>
+          <ul class="list">
+            <li><b>rax</b> = syscall-nummer</li>
+            <li><b>rdi</b> = arg1</li>
+            <li><b>rsi</b> = arg2</li>
+            <li><b>rdx</b> = arg3</li>
+          </ul>
+          <div class="callout" style="margin-top:14px;">
+            <b>write(1, msg, 13)</b> betyder: “send 13 bytes fra adressen <b>msg</b> til destinationen <b>fd=1</b> (stdout).”
+          </div>
+          <p class="small" style="margin-top:10px;">
+            Hvis du ændrer <code>rdx</code> til <b>12</b>, skriver du 12 bytes (ingen newline).
+            Hvis du fjerner <b>exit</b>, “falder” CPU’en ud af koden → crash (ofte SIGSEGV / -11).
+          </p>
+        </div>
+      </div>
+
+      <div class="kbd">
+        <span class="small">Navigér</span>
+        <span class="key">←</span><span class="key">→</span>
+        <span class="small">eller</span>
+        <span class="key">Mellemrum</span>
+      </div>
+    </section>
+
+    <!-- Slide 3 -->
+    <section class="slide" data-title="stdout & fil-deskriptorer">
+      <div class="topbar">
+        <div class="pill"><span class="dot"></span> stdout er ikke “skærmen”</div>
+        <div class="progress">
+          <span id="ptext3">3 / 5</span>
+          <span class="bar"><i id="pbar3"></i></span>
+        </div>
+      </div>
+
+      <h1>stdout (fd 1) er et stik</h1>
+      <p>
+        Fil-deskriptorer er små tal, der peger ind i en tabel for processen (holdt af kernen).
+        Som standard:
+      </p>
+
+      <div class="grid two" style="margin-top: 14px;">
+        <div class="card">
+          <h3>Standard fil-deskriptorer</h3>
+          <ul class="list">
+            <li><b>0</b> = stdin (input)</li>
+            <li><b>1</b> = stdout (normal output)</li>
+            <li><b>2</b> = stderr (fejloutput)</li>
+          </ul>
+          <div class="callout" style="margin-top:14px;">
+            Programmet ved ikke, hvad stdout er forbundet til.
+            Det skriver bare bytes til fd 1.
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Hvorfor det “automatisk” vises i terminalen</h3>
+          <ul class="list">
+            <li>Shell’en har allerede fd 0/1/2 koblet til en terminal-enhed.</li>
+            <li>Når shell’en starter dit program, arver programmet forbindelserne.</li>
+            <li>Derfor peger fd 1 typisk på samme terminal som shell’en.</li>
+          </ul>
+          <pre style="margin-top:12px;"><code># Samme program, forskellige destinationer
+./hello            # stdout → terminalvindue
+./hello > out.txt  # stdout → fil
+./hello | wc -c    # stdout → pipe → andet program</code></pre>
+        </div>
+      </div>
+
+      <div class="kbd">
+        <span class="small">Navigér</span>
+        <span class="key">←</span><span class="key">→</span>
+        <span class="small">eller</span>
+        <span class="key">Mellemrum</span>
+      </div>
+    </section>
+
+    <!-- Slide 4 -->
+    <section class="slide" data-title="Hvorfor syscalls findes">
+      <div class="topbar">
+        <div class="pill"><span class="dot"></span> Hvorfor ikke bare tegne direkte?</div>
+        <div class="progress">
+          <span id="ptext4">4 / 5</span>
+          <span class="bar"><i id="pbar4"></i></span>
+        </div>
+      </div>
+
+      <h1>Hvorfor vi har kernel space</h1>
+      <p>
+        Hvis user-programmer kunne styre enheder eller vilkårlig memory direkte, kunne én fejl (eller malware) crashe
+        eller overtage hele maskinen. CPU’en håndhæver derfor en grænse: <b>user mode</b> vs <b>kernel mode</b>.
+      </p>
+
+      <div class="grid two">
+        <div class="card">
+          <h3>Hardware-sikkerhed (håndhævet af CPU)</h3>
+          <ul class="list">
+            <li><b>Virtual memory</b>: hver proces får sit eget address space</li>
+            <li><b>Page permissions</b>: user pages vs supervisor-only pages</li>
+            <li><b>Privilegerede instruktioner</b>: blokeret i user mode</li>
+          </ul>
+          <div class="callout" style="margin-top:14px;">
+            Hvis et user-program rører memory det ikke ejer → CPU trapper → kernen stopper processen (fx SIGSEGV).
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Kernens opgave</h3>
+          <ul class="list">
+            <li>Koordinere delt hardware (disk, netværk, GPU)</li>
+            <li>Håndhæve rettigheder og isolation</li>
+            <li>Levere sikre services via syscalls</li>
+            <li>Scheduling: hvem kører hvornår, hvem får enhederne</li>
+          </ul>
+          <p class="small" style="margin-top:12px;">
+            Et syscall er ikke “din kode med flere rettigheder”.
+            Det er CPU’en der skifter til kernen, så <b>kernel-kode</b> kører på dine vegne.
+          </p>
+        </div>
+      </div>
+
+      <div class="kbd">
+        <span class="small">Navigér</span>
+        <span class="key">←</span><span class="key">→</span>
+        <span class="small">eller</span>
+        <span class="key">Mellemrum</span>
+      </div>
+    </section>
+
+    <!-- Slide 5 -->
+    <section class="slide" data-title="Hvem tegner pixels?">
+      <div class="topbar">
+        <div class="pill"><span class="dot"></span> Fra bytes til pixels</div>
+        <div class="progress">
+          <span id="ptext5">5 / 5</span>
+          <span class="bar"><i id="pbar5"></i></span>
+        </div>
+      </div>
+
+      <h1>Hvem tegner faktisk “Hello world”?</h1>
+      <p>
+        Dit program skriver bytes til stdout. Kernen ruter bytes til en terminal-enhed.
+        En <b>terminal-applikation</b> (user space) renderer bogstaver med en font og beder grafikløsningen om at vise dem.
+        GPU’en ender med at male pixels.
+      </p>
+
+      <div class="grid">
+        <div class="card">
+          <h3>Pipeline</h3>
+          <div class="stack">
+            <div class="layer"><b>Dit program</b> <span class="tag user">user space</span></div>
+            <div class="layer"><b>write(1, msg, len)</b> <span class="tag kernel">syscall-grænse</span></div>
+            <div class="layer"><b>Kernen ruter bytes → pseudo-terminal</b> <span class="tag kernel">kernel space</span></div>
+            <div class="layer"><b>Terminal læser bytes, tegner glyphs</b> <span class="tag user">user space</span></div>
+            <div class="layer"><b>Window system / driver sender arbejde</b> <span class="tag kernel">kernel + drivere</span></div>
+            <div class="layer"><b>GPU + display controller</b> <span class="tag hw">hardware</span></div>
+          </div>
+
+          <div class="callout" style="margin-top:14px;">
+            Vigtigt: Kernen <b>renderer normalt ikke</b> bogstaverne. Den <b>koordinerer</b> og <b>beskytter</b>.
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Én sidste “wow”-fakta</h3>
+          <ul class="list">
+            <li>stdout er en abstraktion — kan være terminal, fil, pipe eller netværk.</li>
+            <li>GUI-apps laver ikke syscall pr. pixel — de bygger buffers/kommandoer og afleverer dem i store bidder.</li>
+            <li>Samme princip: <b>beregn i user space</b>, brug <b>syscalls</b> til delte ressourcer.</li>
+          </ul>
+          <pre style="margin-top:12px;"><code>I én sætning:
+User-programmer beregner frit,
+men må spørge kernen for sikkert at bruge delt hardware.</code></pre>
+        </div>
+      </div>
+
+      <div class="kbd">
+        <span class="small">Navigér</span>
+        <span class="key">←</span><span class="key">→</span>
+        <span class="small">eller</span>
+        <span class="key">Mellemrum</span>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    (function(){
+      const slides = Array.from(document.querySelectorAll('.slide'));
+      let idx = 0;
+
+      function setProgress(){
+        const total = slides.length;
+        slides.forEach((s, i) => {
+          const t = s.querySelector('.progress span[id^="ptext"]');
+          const b = s.querySelector('.progress i[id^="pbar"]');
+          if (t) t.textContent = `${i+1} / ${total}`;
+          if (b) b.style.width = `${((i+1)/total)*100}%`;
+        });
+      }
+
+      function show(i){
+        idx = Math.max(0, Math.min(slides.length - 1, i));
+        slides.forEach((s, k) => s.classList.toggle('active', k === idx));
+        document.title = `Slides (${idx+1}/${slides.length}) — ${slides[idx].dataset.title || 'Lektion'}`;
+      }
+
+      function next(){ show(idx + 1); }
+      function prev(){ show(idx - 1); }
+
+      setProgress();
+      show(0);
+
+      window.addEventListener('keydown', (e) => {
+        const key = e.key;
+        if (key === 'ArrowRight' || key === ' ' || key === 'PageDown') { e.preventDefault(); next(); }
+        if (key === 'ArrowLeft'  || key === 'PageUp') { e.preventDefault(); prev(); }
+        if (key === 'Home') { e.preventDefault(); show(0); }
+        if (key === 'End') { e.preventDefault(); show(slides.length - 1); }
+      });
+
+      // Click to advance (except when selecting text in code blocks)
+      window.addEventListener('click', (e) => {
+        const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+        if (tag === 'code' || tag === 'pre' || e.target.closest('pre')) return;
+        next();
+      });
+    })();
+  </script>
+</body>
+</html>

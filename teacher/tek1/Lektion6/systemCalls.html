@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Linux x86-64 Syscalls — Hello World</title>
+
+<style>
+:root{
+  --bg:#0b1020;
+  --card:#111a33;
+  --text:#eaf0ff;
+  --muted:#b7c2e6;
+  --line:rgba(255,255,255,.10);
+  --accent:#7dd3fc;
+  --accent2:#a7f3d0;
+  --shadow:0 18px 60px rgba(0,0,0,.35);
+  --radius:16px;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+}
+
+*{box-sizing:border-box;}
+body{
+  margin:0;
+  font-family:var(--sans);
+  color:var(--text);
+  background:
+    radial-gradient(1200px 700px at 10% 10%, rgba(125,211,252,.20), transparent 60%),
+    radial-gradient(900px 600px at 90% 10%, rgba(167,243,208,.18), transparent 60%),
+    linear-gradient(180deg, #070a14 0%, var(--bg) 65%);
+}
+
+.wrapper{
+  max-width:1400px;
+  margin:auto;
+  padding:30px;
+}
+
+h1{
+  margin:0 0 10px;
+  font-size:40px;
+  letter-spacing:-0.5px;
+}
+
+.subtitle{
+  color:var(--muted);
+  margin-bottom:30px;
+  max-width:900px;
+}
+
+.grid{
+  display:grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap:20px;
+}
+
+.card{
+  background:rgba(17,26,51,.7);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:18px;
+  box-shadow:var(--shadow);
+}
+
+h2{
+  margin-top:0;
+  font-size:18px;
+  margin-bottom:10px;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:14px;
+}
+
+th, td{
+  padding:8px;
+  border-bottom:1px solid var(--line);
+  text-align:left;
+}
+
+th{
+  color:#fff;
+  font-weight:700;
+  font-size:12px;
+  text-transform:uppercase;
+}
+
+code{
+  font-family:var(--mono);
+}
+
+pre{
+  background:rgba(0,0,0,.45);
+  padding:14px;
+  border-radius:12px;
+  overflow:auto;
+  font-family:var(--mono);
+  font-size:13px;
+}
+
+.highlight{
+  background:linear-gradient(90deg, rgba(125,211,252,.2), rgba(167,243,208,.15));
+  padding:12px;
+  border-radius:10px;
+  margin-top:15px;
+  font-size:15px;
+}
+
+.center-card{
+  grid-column: span 3;
+}
+
+.footer{
+  margin-top:25px;
+  color:var(--muted);
+  font-size:13px;
+  display:flex;
+  justify-content:space-between;
+}
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+
+<h1>Linux x86-64 Syscalls — Hello World Reference</h1>
+<div class="subtitle">
+Samlet oversigt over de registre, systemkald og konstanter der anvendes i det rå assembly-program.
+</div>
+
+<div class="grid">
+
+<!-- VENSTRE KOLONNE -->
+<div class="card">
+<h2>Systemkald – registerrækkefølge</h2>
+<table>
+<tr><th>Formål</th><th>Register</th></tr>
+<tr><td>Systemkaldsnummer</td><td><code>rax</code></td></tr>
+<tr><td>Argument 1</td><td><code>rdi</code></td></tr>
+<tr><td>Argument 2</td><td><code>rsi</code></td></tr>
+<tr><td>Argument 3</td><td><code>rdx</code></td></tr>
+<tr><td>Argument 4</td><td><code>r10</code></td></tr>
+<tr><td>Argument 5</td><td><code>r8</code></td></tr>
+<tr><td>Argument 6</td><td><code>r9</code></td></tr>
+<tr><td>Returværdi</td><td><code>rax</code></td></tr>
+</table>
+</div>
+
+<div class="card">
+<h2>Systemkaldsnumre</h2>
+<table>
+<tr><th>Systemkald</th><th>Nummer</th></tr>
+<tr><td><code>read</code></td><td>0</td></tr>
+<tr><td><code>write</code></td><td>1</td></tr>
+<tr><td><code>exit</code></td><td>60</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h2>Standard fil-deskriptorer</h2>
+<table>
+<tr><th>Nummer</th><th>Betydning</th></tr>
+<tr><td>0</td><td>stdin (standard input)</td></tr>
+<tr><td>1</td><td>stdout (standard output)</td></tr>
+<tr><td>2</td><td>stderr (fejl-output)</td></tr>
+</table>
+</div>
+
+<!-- MIDTER RÆKKE – HELE PROGRAMMET -->
+<div class="card center-card">
+<h2>Hele Hello World Programmet</h2>
+
+<pre><code>section .data
+    msg db "Hello world!", 0ah
+
+section .text
+    global _start
+
+_start:
+    mov rax, 1      ; systemkald: write
+    mov rdi, 1      ; fil-deskriptor (stdout)
+    mov rsi, msg    ; adresse til teksten
+    mov rdx, 13     ; antal bytes
+    syscall
+
+    mov rax, 60     ; systemkald: exit
+    mov rdi, 0      ; exit-status
+    syscall</code></pre>
+
+<div class="highlight">
+C-ækvivalent:
+<br>
+<code>write(1, "Hello world!\n", 13);</code><br>
+<code>exit(0);</code>
+</div>
+
+</div>
+
+<!-- NEDERSTE RÆKKE -->
+<div class="card">
+<h2>write() parametre</h2>
+<table>
+<tr><th>Register</th><th>Betydning</th></tr>
+<tr><td><code>rax</code></td><td>1 (write)</td></tr>
+<tr><td><code>rdi</code></td><td>fil-deskriptor</td></tr>
+<tr><td><code>rsi</code></td><td>pointer til buffer</td></tr>
+<tr><td><code>rdx</code></td><td>antal bytes</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h2>exit() parametre</h2>
+<table>
+<tr><th>Register</th><th>Betydning</th></tr>
+<tr><td><code>rax</code></td><td>60 (exit)</td></tr>
+<tr><td><code>rdi</code></td><td>exit-kode</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h2>Direktiver & konstanter</h2>
+<table>
+<tr><th>Symbol</th><th>Forklaring</th></tr>
+<tr><td><code>.data</code></td><td>Initialiserede data</td></tr>
+<tr><td><code>.text</code></td><td>Eksekverbar kode</td></tr>
+<tr><td><code>db</code></td><td>Definér byte</td></tr>
+<tr><td><code>0ah</code></td><td>Hex for newline</td></tr>
+<tr><td><code>_start</code></td><td>Programstart (entry point)</td></tr>
+</table>
+</div>
+
+</div>
+
+<div class="footer">
+<div>x86-64 Linux ABI</div>
+<div>rax vælger systemkald • rdi,rsi,rdx er argumenter</div>
+</div>
+
+</div>
+
+</body>
+</html>
