@@ -10,6 +10,7 @@ import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage'
 import * as LocalAuthentication from 'expo-local-authentication'
 import * as WebBrowser from 'expo-web-browser'
 import * as Google from 'expo-auth-session/providers/google'
+import * as AuthSession from 'expo-auth-session'
 
 
 let auth
@@ -34,7 +35,11 @@ const [enteredText, setenteredText] = useState("type here")
 
 const [request, response, promptAsync] = Google.useAuthRequest({
   scopes:["profile", "email"],
-  iosClientId: "366920203555-42ndga1spvql14cdmrkplpn22s87be5j.apps.googleusercontent.com"
+   iosClientId: "366920203555-42ndga1spvql14cdmrkplpn22s87be5j.apps.googleusercontent.com",
+   androidClientId: "366920203555-97f4f2onv5d1pu2nqmhn23g2lui65q9c.apps.googleusercontent.com",
+   redirectUri: AuthSession.makeRedirectUri({                                                                                               
+      native: "com.googleusercontent.apps.366920203555-97f4f2onv5d1pu2nqmhn23g2lui65q9c:/oauth2redirect/google"                                               
+    })
 })
 console.log("redirect URI:", request?.redirectUri)
 
@@ -192,6 +197,7 @@ alignItems: 'center',
 justifyContent: 'center',
 },
 });
+
 
 
 
