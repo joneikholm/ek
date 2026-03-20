@@ -3,10 +3,14 @@ import { StyleSheet, Text, View, Button, TextInput, Platform } from 'react-nativ
 import { useState, useEffect } from 'react';
 import { database,app } from './firebase';
 import { addDoc, collection } from 'firebase/firestore';
-import {getAuth, signInWithEmailAndPassword, signOut} from 'firebase/auth'
+import {getAuth, signInWithEmailAndPassword, signOut, signInWithCredential} from 'firebase/auth'
 import {createUserWithEmailAndPassword, onAuthStateChanged} from 'firebase/auth'
-import {initializeAuth, getReactNativePersistence} from 'firebase/auth'
+import {initializeAuth, getReactNativePersistence, GoogleAuthProvider} from 'firebase/auth'
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage'
+import * as LocalAuthentication from 'expo-local-authentication'
+import * as WebBrowser from 'expo-web-browser'
+import * as Google from 'expo-auth-session/providers/google'
+
 
 let auth
 if(Platform.OS === "web"){
@@ -17,13 +21,33 @@ if(Platform.OS === "web"){
   })
 }
 
+WebBrowser.maybeCompleteAuthSession()
 
 export default function App() {
 const [enteredEmail, setEnteredEmail] = useState("jon@d.dk")
 const [enteredPassword, setEnteredPassword] = useState("12345678")
 const [userId, setUserId] = useState(null)
+const [user, setUser] = useState(null)
 const [enteredText, setenteredText] = useState("type here")
 //const auth = getAuth(app)
+
+
+const [request, response, promptAsync] = Google.useAuthRequest({
+  scopes:["profile", "email"],
+  iosClientId: "366920203555-42ndga1spvql14cdmrkplpn22s87be5j.apps.googleusercontent.com"
+})
+console.log("redirect URI:", request?.redirectUri)
+
+useEffect(()=>{
+  if(response?.type=== "success"){
+    const {id_token, access_token} = response.params
+    const credential = GoogleAuthProvider.credential(id_token,access_token)
+    signInWithCredential(auth, credential)
+    .then((userCredential)=> setUserId(userCredential.user.uid))
+    .catch((error)=> console.log("Google login error" + error))
+  }
+},[response])
+
 
 useEffect(()=>{
   const auth_ = getAuth(app)
@@ -72,11 +96,46 @@ async function signOut_() {
   //setUserId(null)
 }
 
+async function handleBioLogin() {
+  const hasHardware = await LocalAuthentication.hasHardwareAsync() // step 1
+  if(!hasHardware){
+    //alert("biometrics not supported")
+  }else{
+    alert("biometrics ok")
+  }
+  
+  const isEnrolled = await LocalAuthentication.isEnrolledAsync() // step 1
+  if(!isEnrolled){
+    //alert("biometrics not enrolled")
+  }else{
+    alert("biometrics enrolled")
+  }
 
+  const result = await LocalAuthentication.authenticateAsync({
+    promptMessage: "Authenticate to continue"
+  })
+  if(result.success){
+    alert("logget ind: LOKALT")
+  }else{
+    alert("ikke logget ind med biometrics")
+  }
+
+
+}
+() => promptAsync()
 return (
 <View style={styles.container}>
     { !userId &&
       <>
+        <Button
+        title='Google Login'
+        onPress={() => promptAsync()}
+        />
+
+        <Button
+        title='Log in with bio'
+        onPress={handleBioLogin}
+        />
         <Text>Login</Text>
         <TextInput
         onChangeText={newText => setEnteredEmail(newText)}
@@ -135,6 +194,7 @@ justifyContent: 'center',
 });
 
 
+
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import {getFirestore} from 'firebase/firestore';
@@ -143,11 +203,10 @@ import {getFirestore} from 'firebase/firestore';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-....
+  apiKey: ....
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const database = getFirestore(app);
 export { database, app }
-
